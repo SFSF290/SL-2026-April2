@@ -1,0 +1,36 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import kruskal, binom_test
+from scikit_posthocs import posthoc_dunn
+import numpy as np
+
+# Load merged de novo callset with overlap categories
+df = pd.read_csv("merged_de_novo_with_categories.csv")
+df['log_length'] = np.log10(df['SVLEN'])
+
+# Kernel density plot
+plt.figure(figsize=(10,6))
+for cat in df['overlap_category'].unique():
+    sns.kdeplot(data=df[df['overlap_category']==cat], x='log_length', label=cat, fill=True)
+plt.xlabel("CNV Length (log10 bp)")
+plt.title("CNV Length Distribution by Tissue Overlap")
+plt.legend()
+plt.savefig("cnv_length_kde.png", dpi=300)
+
+# Kruskal-Wallis + Dunn's test
+groups = [df[df['overlap_category']==cat]['log_length'] for cat in df['overlap_category'].unique()]
+kw_stat, p = kruskal(*groups)
+print(f"Kruskal-Wallis: χ²={kw_stat:.2f}, p={p}")
+
+# Dunn's post-hoc
+dunn = posthoc_dunn(df, val_col='log_length', group_col='overlap_category')
+print(dunn)
+
+# Deletion bias binomial tests (per category)
+for cat in df['overlap_category'].unique():
+    sub = df[df['overlap_category']==cat]
+    n_del = (sub['SVTYPE']=='DEL').sum()
+    n_total = len(sub)
+    p_binom = binom_test(n_del, n_total, p=0.5, alternative='greater')
+    print(f"{cat}: {n_del}/{n_total} deletions, p={p_binom:.2e}")
