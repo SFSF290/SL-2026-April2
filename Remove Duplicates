@@ -1,0 +1,59 @@
+def deduplicate_cnvs(df, window=1000):
+    """Deduplicate CNVs that are within 1000bp of each other 
+    (same chr, SVTYPE, CN_State). Uses median coordinates for merged events."""
+    if df.empty:
+        return df
+    
+    # Remove rows with missing Chr_Number first
+    df = df[df['Chr_Number'].notna()].copy()
+    
+    # Sort by chromosome and start position
+    df = df.sort_values(['Chr_Number', 'Start']).reset_index(drop=True)
+    
+    deduplicated = []
+    used_indices = set()
+    
+    for idx, cnv in df.iterrows():
+        if idx in used_indices:
+            continue
+        
+        # Find all CNVs that match this one within the 1000 bp window
+        matches = []
+        for idx2, cnv2 in df.iterrows():
+            if idx2 <= idx or idx2 in used_indices:
+                continue
+            if (cnv['Chr_Number'] == cnv2['Chr_Number'] and
+                cnv['SVTYPE'] == cnv2['SVTYPE'] and
+                cnv['CN_State'] == cnv2['CN_State'] and
+                abs(cnv['Start'] - cnv2['Start']) <= window and
+                abs(cnv['End'] - cnv2['End']) <= window):
+                matches.append(idx2)
+        
+        # Merge this CNV with all matches
+        if matches:
+            all_indices = [idx] + matches
+            merged_cnv = cnv.copy()
+            
+            # Combine sources if Source column exists
+            if 'Source' in df.columns:
+                sources = [df.loc[i, 'Source'] for i in all_indices]
+                merged_cnv['Source'] = ';'.join(sorted(set(sources)))
+            
+            # Use median positions if multiple calls
+            starts = [df.loc[i, 'Start'] for i in all_indices]
+            ends = [df.loc[i, 'End'] for i in all_indices]
+            merged_cnv['Start'] = int(pd.Series(starts).median())
+            merged_cnv['End'] = int(pd.Series(ends).median())
+            
+            # Add note about deduplication
+            merged_cnv['Deduplicated_Count'] = len(all_indices)
+            
+            deduplicated.append(merged_cnv)
+            used_indices.update(all_indices)
+        else:
+            cnv_copy = cnv.copy()
+            cnv_copy['Deduplicated_Count'] = 1
+            deduplicated.append(cnv_copy)
+            used_indices.add(idx)
+    
+    return pd.DataFrame(deduplicated).reset_index(drop=True)
