@@ -1,0 +1,12 @@
+hifi_df = pd.read_csv("/path/to/your/hificnv_detailed.csv")
+
+# Standardize the same way
+hifi_df['Chr_Number'] = hifi_df['chrom'].map(ncbi_to_chr_dict)   # your chromosome mapping
+hifi_df['Chr_Number'] = hifi_df['Chr_Number'].fillna(hifi_df['chrom'])
+hifi_df['CN_State'] = hifi_df['cn_state'].replace('.', '>4')
+hifi_df['Source'] = 'HiFiCNV'
+
+hifi_clean = hifi_df[['Sample', 'Tissue', 'Chr_Number', 'Start', 'End',
+                      'SVTYPE', 'SVLEN', 'CN_State', 'Genic', 'Coding', 'Source']]
+
+hifi_clean.to_csv("/cnv_merged_output/your_sample_combined.csv", index=False)
