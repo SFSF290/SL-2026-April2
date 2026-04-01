@@ -1,0 +1,66 @@
+import pandas as pd
+import os
+
+# ====================== PATHS (change these for each sample) ======================
+sawfish_csv = "/cnv_csv_files/2/7059_LI_cnvs.csv"           # ← Your cleaned Sawfish file
+hifi_csv    = "/Downloads/cnv_detailed_tables/7059_LI_cnvs_detailed.csv"  # ← HiFiCNV detailed table
+output_file = "/cnv_merged_output/7059_LI_combined.csv"     # ← Final merged file
+
+print("=" * 80)
+print("MERGING SAWFISH + HiFiCNV")
+print("=" * 80)
+
+# ====================== LOAD CLEANED SAWFISH (already parsed) ======================
+sawfish_std = pd.read_csv(sawfish_csv)
+
+# ====================== LOAD AND STANDARDIZE HiFiCNV ======================
+hifi_df = pd.read_csv(hifi_csv)
+
+# NCBI RefSeq to chromosome mapping for mm39
+ncbi_to_chr = {
+    'NC_000067.7': '1', 'NC_000068.8': '2', 'NC_000069.7': '3', 'NC_000070.7': '4',
+    'NC_000071.7': '5', 'NC_000072.7': '6', 'NC_000073.7': '7', 'NC_000074.7': '8',
+    'NC_000075.7': '9', 'NC_000076.7': '10', 'NC_000077.7': '11', 'NC_000078.7': '12',
+    'NC_000079.7': '13', 'NC_000080.7': '14', 'NC_000081.7': '15', 'NC_000082.7': '16',
+    'NC_000083.7': '17', 'NC_000084.7': '18', 'NC_000085.7': '19',
+    'NC_000086.8': 'X', 'NC_000087.8': 'Y', 'NC_005089.1': 'M'
+}
+
+hifi_df['Chr_Number'] = hifi_df['chrom'].map(ncbi_to_chr)
+hifi_df['Chr_Number'] = hifi_df['Chr_Number'].fillna(hifi_df['chrom'])   # keep original if not in map
+
+# Fix CN_State
+hifi_df['CN_State'] = hifi_df['cn_state'].replace('.', '>4')
+
+# Standardize to match Sawfish format
+hifi_std = pd.DataFrame({
+    'Sample': '7059',                    # ← change per sample
+    'Tissue': 'LI',                      # ← change per sample
+    'Chr_Number': hifi_df['Chr_Number'],
+    'Start': hifi_df['start'],
+    'End': hifi_df['end'],
+    'SVTYPE': hifi_df['svtype'],
+    'SVLEN': hifi_df['svlen'],
+    'CN_State': hifi_df['CN_State'],
+    'Genic': hifi_df['genic'],
+    'Coding': hifi_df['coding'],
+    'Source': 'HiFiCNV'
+})
+
+print(f"HiFiCNV rows: {len(hifi_std)}")
+print(f"SAWFISH rows: {len(sawfish_std)}")
+
+# ====================== MERGE BOTH CALLSETS ======================
+combined = pd.concat([sawfish_std, hifi_std], ignore_index=True)
+
+# Sort by chromosome and position
+combined = combined.sort_values(['Chr_Number', 'Start']).reset_index(drop=True)
+
+# ====================== SAVE ======================
+combined.to_csv(output_file, index=False)
+
+print(f"\n✅ MERGE COMPLETE")
+print(f"   Total rows in combined file: {len(combined)}")
+print(f"   SAWFISH: {len(combined[combined['Source']=='SAWFISH'])}")
+print(f"   HiFiCNV: {len(combined[combined['Source']=='HiFiCNV'])}")
+print(f"   Saved to: {output_file}")
