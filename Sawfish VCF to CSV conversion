@@ -1,0 +1,56 @@
+import pandas as pd
+import os
+
+# ====================== INPUT / OUTPUT PATHS ======================
+sawfish_vcf = "/path/to/your/sample_variants.vcf.gz"          # ← CHANGE THIS
+output_csv = "/cnv_merged_output/your_sample_combined.csv"   # ← CHANGE THIS
+
+print("Converting Sawfish VCF to cleaned CSV...")
+
+# ====================== READ ONLY FIRST 10 COLUMNS (handles commas in genes) ======================
+column_names = ['Sample', 'Tissue', 'Chromosome', 'Start', 'End', 
+                'SVTYPE', 'SVLEN', 'CN_State', 'Genic', 'Coding']
+
+sawfish_df = pd.read_csv(
+    sawfish_vcf,
+    names=column_names,
+    skiprows=1,                    # skip the header line
+    usecols=range(10),             # ← THIS IS THE KEY LINE YOU ASKED FOR
+    engine='python',               # required because of commas inside fields
+    sep='\t',                      # VCF is tab-separated
+    comment='#',                   # skip all comment lines
+    low_memory=False
+)
+
+print(f"✓ Loaded {len(sawfish_df)} rows from Sawfish VCF")
+
+# ====================== CLEANING STEPS ======================
+# 1. Extract Chr_Number (chr1 → 1, chrX → X, etc.)
+def extract_chr_number(chrom):
+    if pd.isna(chrom):
+        return None
+    chrom_str = str(chrom).strip()
+    if chrom_str.startswith('chr'):
+        return chrom_str.replace('chr', '')
+    return chrom_str
+
+sawfish_df['Chr_Number'] = sawfish_df['Chromosome'].apply(extract_chr_number)
+
+# 2. Fix CN_State (replace '.' with '>4')
+sawfish_df['CN_State'] = sawfish_df['CN_State'].replace('.', '>4')
+
+# 3. Add Source column
+sawfish_df['Source'] = 'SAWFISH'
+
+# 4. Select final columns in clean order
+final_columns = ['Sample', 'Tissue', 'Chr_Number', 'Start', 'End', 
+                 'SVTYPE', 'SVLEN', 'CN_State', 'Genic', 'Coding', 'Source']
+
+sawfish_clean = sawfish_df[final_columns].copy()
+
+# ====================== SAVE ======================
+sawfish_clean.to_csv(output_csv, index=False)
+
+print(f"✓ Saved cleaned CSV: {output_csv}")
+print(f"   Total rows: {len(sawfish_clean)}")
+print(f"   Unique chromosomes: {sorted(sawfish_clean['Chr_Number'].dropna().unique())}")
