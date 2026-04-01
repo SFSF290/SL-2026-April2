@@ -1,0 +1,16 @@
+import pandas as pd
+from scipy.stats import chi2_contingency
+
+# After VEP annotation
+vep = pd.read_csv("vep_annotated.txt", sep="\t")
+merged = pd.merge(your_de_novo_df, vep, left_on=..., right_on=...)  # match by coordinates
+
+# Chromosome lengths (mm39 - you hard-coded these)
+chr_lengths = {...}  # 1:195154279, 2:..., X:..., etc.
+
+merged['density'] = merged.groupby('Chr_Number')['Chr_Number'].transform('count') / merged['Chr_Number'].map(chr_lengths) * 1e6
+
+# Chi-square for functional categories by overlap type
+contingency = pd.crosstab(merged['overlap_category'], merged['biotype_category'])
+chi2, p, dof, expected = chi2_contingency(contingency)
+print(f"Functional category χ² = {chi2:.2f}, p = {p:.2e}")
